@@ -4,6 +4,7 @@ import com.aidanmars.MathUtils;
 import com.aidanmars.Palette;
 import com.aidanmars.Palettes;
 import it.unimi.dsi.fastutil.ints.Int2IntFunction;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import org.jetbrains.annotations.UnknownNullability;
 
@@ -14,9 +15,7 @@ import static com.aidanmars.Palettes.read;
 import static com.aidanmars.Palettes.validateCoord;
 
 public final class TestPaletteImpl implements Palette {
-    final byte dimension;
-    final byte minBitsPerEntry;
-    final byte maxBitsPerEntry;
+    final byte dimension, minBitsPerEntry, maxBitsPerEntry;
     byte directBits;
     int maxValue;
 
@@ -27,7 +26,7 @@ public final class TestPaletteImpl implements Palette {
     // palette index = value
     IntArrayList paletteToValueList;
     // value = palette index
-    PaletteMap valueToPaletteMap;
+    Int2IntOpenHashMap valueToPaletteMap;
 
     public TestPaletteImpl(byte dimension, byte minBitsPerEntry, byte maxBitsPerEntry, int maxValue) {
         validateDimension(dimension);
@@ -41,7 +40,7 @@ public final class TestPaletteImpl implements Palette {
         this.maxValue = maxValue;
     }
 
-    TestPaletteImpl(byte dimension, byte minBitsPerEntry, byte maxBitsPerEntry, int maxValue, byte bitsPerEntry) {
+    public TestPaletteImpl(byte dimension, byte minBitsPerEntry, byte maxBitsPerEntry, int maxValue, byte bitsPerEntry) {
         this(dimension, minBitsPerEntry, maxBitsPerEntry, maxValue);
         if (bitsPerEntry != 0
                 && (bitsPerEntry < minBitsPerEntry || bitsPerEntry > maxBitsPerEntry)
@@ -56,12 +55,14 @@ public final class TestPaletteImpl implements Palette {
 
             if (!isDirect()) {
                 this.paletteToValueList = new IntArrayList();
-                this.valueToPaletteMap = new PaletteMap();
+                this.valueToPaletteMap = new Int2IntOpenHashMap();
+                this.valueToPaletteMap.defaultReturnValue(-1);
                 this.paletteToValueList.add(0);
                 this.valueToPaletteMap.put(0, 0);
             }
         }
     }
+
     @Override
     public int get(int x, int y, int z) {
         validateCoord(dimension, x, y, z);
@@ -188,7 +189,8 @@ public final class TestPaletteImpl implements Palette {
 
     void initIndirect() {
         final int fillValue = this.count;
-        this.valueToPaletteMap = new PaletteMap();
+        this.valueToPaletteMap = new Int2IntOpenHashMap();
+        this.valueToPaletteMap.defaultReturnValue(-1);
         this.paletteToValueList = new IntArrayList();
         this.valueToPaletteMap.put(fillValue, 0);
         paletteToValueList.add(fillValue);

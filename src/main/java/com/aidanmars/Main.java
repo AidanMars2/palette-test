@@ -24,7 +24,7 @@ public class Main {
 
             startTime = System.nanoTime();
             int referenceCount = 0;
-            while (System.nanoTime() - startTime < 2500 * NANO_TO_MILLI_MULT) {
+            while (System.nanoTime() - startTime < 5000 * NANO_TO_MILLI_MULT) {
                 bench.runReference();
                 referenceCount++;
             }
@@ -32,7 +32,7 @@ public class Main {
 
             startTime = System.nanoTime();
             int testCount = 0;
-            while (System.nanoTime() - startTime < 2500 * NANO_TO_MILLI_MULT) {
+            while (System.nanoTime() - startTime < 5000 * NANO_TO_MILLI_MULT) {
                 bench.runTest();
                 testCount++;
             }

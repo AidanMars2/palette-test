@@ -130,7 +130,6 @@ public final class PaletteImpl implements Palette {
         return lastPaletteIndex;
     }
 
-    /// Assumes {@link PaletteImpl#bitsPerEntry} != 0
     int valueToPalettIndexOrDefault(int value) {
         return isDirect() ? value : valueToPaletteMap.get(value);
     }
