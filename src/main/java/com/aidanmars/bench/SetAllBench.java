@@ -39,14 +39,14 @@ public class SetAllBench {
         palette.setAll((_, _, _) -> nextValue());
     }
 
-    @Benchmark
-    public void manual() {
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    palette.set(x, y, z, nextValue());
-                }
-            }
-        }
-    }
+//    @Benchmark
+//    public void manual() {
+//        for (int y = 0; y < 16; y++) {
+//            for (int z = 0; z < 16; z++) {
+//                for (int x = 0; x < 16; x++) {
+//                    palette.set(x, y, z, nextValue());
+//                }
+//            }
+//        }
+//    }
 }

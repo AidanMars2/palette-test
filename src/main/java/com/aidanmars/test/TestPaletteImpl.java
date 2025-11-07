@@ -489,7 +489,7 @@ public final class TestPaletteImpl implements Palette {
     }
 
     /// Assumes bitsPerEntry != 0
-    private @Nullable PaletteIndexMap collectOptimizedPalette(byte maxBitsPerEntry) {
+    public @Nullable PaletteIndexMap collectOptimizedPalette(byte maxBitsPerEntry) {
         final int size = maxSize();
         final int bits = bitsPerEntry;
         final int valuesPerLong = 64 / bits;
@@ -503,8 +503,11 @@ public final class TestPaletteImpl implements Palette {
             for (int j = 0; j < end; j++, idx++) {
                 final int paletteIndex = (int) (block & mask);
                 final int value = paletteIndexToValue(paletteIndex);
-                final int insertResult = result.valueToIndexCapped(value, maxPaletteSize);
-                if (insertResult < 0) return null;
+                final int pos = result.find(value);
+                if (pos < 0) {
+                    if (result.size() >= maxPaletteSize) return null;
+                    result.UNSAFE_insert(~pos, value);
+                }
                 block >>>= bits;
             }
         }
@@ -546,30 +549,27 @@ public final class TestPaletteImpl implements Palette {
 
     private void retrieveAll(EntryConsumer consumer, boolean consumeEmpty) {
         if (!consumeEmpty && count == 0) return;
-        final long[] values = this.values;
-        final int dimension = this.dimension();
-        final int bitsPerEntry = this.bitsPerEntry;
-        final int magicMask = (1 << bitsPerEntry) - 1;
-        final int valuesPerLong = 64 / bitsPerEntry;
         final int size = maxSize();
+        final int bits = bitsPerEntry;
+        final int valuesPerLong = 64 / bits;
+        final int mask = (1 << bits) - 1;
         final int dimensionMinus = dimension - 1;
-        final int[] ids = isDirect() ? null : paletteIndexMap.indexToValueArray();
-        final int dimensionBitCount = TestMathUtils.bitsToRepresent(dimensionMinus);
-        final int shiftedDimensionBitCount = dimensionBitCount << 1;
-        for (int i = 0; i < values.length; i++) {
-            final long value = values[i];
-            final int startIndex = i * valuesPerLong;
-            final int endIndex = Math.min(startIndex + valuesPerLong, size);
-            for (int index = startIndex; index < endIndex; index++) {
-                final int bitIndex = (index - startIndex) * bitsPerEntry;
-                final int paletteIndex = (int) (value >> bitIndex & magicMask);
-                if (consumeEmpty || paletteIndex != 0) {
-                    final int y = index >> shiftedDimensionBitCount;
-                    final int z = index >> dimensionBitCount & dimensionMinus;
-                    final int x = index & dimensionMinus;
-                    final int result = ids != null && paletteIndex < ids.length ? ids[paletteIndex] : paletteIndex;
-                    consumer.accept(x, y, z, result);
+        final int dimensionBits = TestMathUtils.bitsToRepresent(dimensionMinus);
+        final int dimensionBitsShifted = dimensionBits << 1;
+
+        for (int i = 0, idx = 0; i < values.length; i++) {
+            long block = values[i];
+            final int end = Math.min(valuesPerLong, size - idx);
+            for (int j = 0; j < end; j++, idx++) {
+                final int paletteIndex = (int) (block & mask);
+                final int value = paletteIndexToValue(paletteIndex);
+                if (consumeEmpty || value != 0) {
+                    final int x = idx & dimensionMinus;
+                    final int y = (idx >> dimensionBitsShifted) & dimensionMinus;
+                    final int z = (idx >> dimensionBits) & dimensionMinus;
+                    consumer.accept(x, y, z, value);
                 }
+                block >>>= bits;
             }
         }
     }

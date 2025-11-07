@@ -43,15 +43,15 @@ public class ReplaceAllBench {
         });
     }
 
-    @Benchmark
-    public void manual(Blackhole bh) {
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    bh.consume(palette.get(x, y, z));
-                    palette.set(x, y, z, nextValue());
-                }
-            }
-        }
-    }
+//    @Benchmark
+//    public void manual(Blackhole bh) {
+//        for (int y = 0; y < 16; y++) {
+//            for (int z = 0; z < 16; z++) {
+//                for (int x = 0; x < 16; x++) {
+//                    bh.consume(palette.get(x, y, z));
+//                    palette.set(x, y, z, nextValue());
+//                }
+//            }
+//        }
+//    }
 }
