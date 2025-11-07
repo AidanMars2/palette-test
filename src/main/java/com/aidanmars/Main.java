@@ -1,43 +1,34 @@
 package com.aidanmars;
 
-import com.aidanmars.bench.BenchMark;
-import com.aidanmars.bench.GetSetBenchmark;
+import com.aidanmars.bench.*;
+import org.openjdk.jmh.runner.Runner;
+import org.openjdk.jmh.runner.RunnerException;
+import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 
-import java.util.ArrayList;
-import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
-    private static final long NANO_TO_MILLI_MULT = 1000_000;
+    static void main() {
+        var options = new OptionsBuilder()
+//                .include(FillBench.class.getSimpleName())
+//                .include(GetSetDirectBench.class.getSimpleName())
+//                .include(GetSetBench.class.getSimpleName())
+//                .include(GetAllBench.class.getSimpleName())
+//                .include(ReplaceAllBench.class.getSimpleName())
+//                .include(SetAllBench.class.getSimpleName())
+                .include(OptimizationBench.class.getSimpleName())
+                .forks(3)
+                .warmupIterations(5)
+                .measurementIterations(10)
+                .warmupTime(new TimeValue(2, TimeUnit.SECONDS))
+                .measurementTime(new TimeValue(2, TimeUnit.SECONDS))
+                .build();
 
-    public static void main(String[] args) {
-        var rng = new Random(1234567890);
-        var benches = new ArrayList<BenchMark>();
-        benches.add(new GetSetBenchmark(rng));
-
-        for (BenchMark bench : benches) {
-            System.out.println("Running " + bench.name() + " benchmark");
-            long startTime = System.nanoTime();
-            while (System.nanoTime() - startTime < 100 * NANO_TO_MILLI_MULT) {
-                bench.runReference();
-                bench.runTest();
-            }
-
-            startTime = System.nanoTime();
-            int referenceCount = 0;
-            while (System.nanoTime() - startTime < 5000 * NANO_TO_MILLI_MULT) {
-                bench.runReference();
-                referenceCount++;
-            }
-            System.out.println("Reference throughput for " + bench.name() + ": " + referenceCount);
-
-            startTime = System.nanoTime();
-            int testCount = 0;
-            while (System.nanoTime() - startTime < 5000 * NANO_TO_MILLI_MULT) {
-                bench.runTest();
-                testCount++;
-            }
-            System.out.println("Test throughput for " + bench.name() + ": " + testCount);
-            System.out.println("Relative throughput for " + bench.name() + ": " + (((double) testCount) / referenceCount));
+        try {
+            new Runner(options).run();
+        } catch (RunnerException e) {
+            throw new RuntimeException(e);
         }
     }
 }
