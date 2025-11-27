@@ -92,6 +92,13 @@ public class TestPalettes {
             throw new IllegalArgumentException("Coordinates must be less than the dimension size, got " + x + ", " + y + ", " + z + " for dimension " + dimension);
     }
 
+    public static void validateValue(int value, byte directBits) {
+        if (value < 0)
+            throw new IllegalArgumentException("Palette values must be non-negative");
+        if (value >= (1 << directBits))
+            throw new IllegalArgumentException("Palette values must be less than the direct bits size, got " + value);
+    }
+
     public static void validateDimension(int dimension) {
         if (dimension <= 1 || (dimension & dimension - 1) != 0)
             throw new IllegalArgumentException("Dimension must be a positive power of 2, got " + dimension);

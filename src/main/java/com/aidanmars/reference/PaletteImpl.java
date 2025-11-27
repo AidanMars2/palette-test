@@ -678,7 +678,8 @@ public final class PaletteImpl implements Palette {
         this.paletteToValueList = palette;
     }
 
-    void makeDirect() {
+    @Override
+    public void makeDirect() {
         if (!hasPalette()) return;
         if (bitsPerEntry == 0) {
             final int fillValue = this.count;

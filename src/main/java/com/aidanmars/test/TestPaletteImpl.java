@@ -12,11 +12,11 @@ import java.util.function.IntUnaryOperator;
 
 import static com.aidanmars.test.TestPalettes.*;
 
+@SuppressWarnings("UnstableApiUsage")
 @NotNullByDefault
 public final class TestPaletteImpl implements Palette {
     private static final ThreadLocal<int[]> WRITE_CACHE = ThreadLocal.withInitial(() -> new int[4096]);
-    final byte dimension, minBitsPerEntry, maxBitsPerEntry;
-    byte directBits;
+    final byte dimension, minBitsPerEntry, maxBitsPerEntry, directBits;
 
     byte bitsPerEntry = 0;
     int count = 0; // Serve as the single value if bitsPerEntry == 0
@@ -88,6 +88,7 @@ public final class TestPaletteImpl implements Palette {
         final int[] cache = WRITE_CACHE.get();
         final int dimension = dimension();
         final int maxPaletteSize = 1 << maxBitsPerEntry;
+        final byte directBits = this.directBits;
         // Fill cache with values
         @Nullable
         PaletteIndexMap newPaletteIndexMap = new PaletteIndexMap(minBitsPerEntry);
@@ -97,16 +98,15 @@ public final class TestPaletteImpl implements Palette {
             for (int z = 0; z < dimension; z++) {
                 for (int x = 0; x < dimension; x++) {
                     final int value = supplier.get(x, y, z);
+                    validateValue(value, directBits);
                     if (value != 0) count++;
                     if (newPaletteIndexMap == null) {
-                        checkValue(value, false);
                         cache[index++] = value;
                         continue;
                     }
                     final int maybePaletteIndex = newPaletteIndexMap.valueToIndexCapped(value, maxPaletteSize);
                     if (maybePaletteIndex < 0) {
                         for (int i = 0; i < index; i++) cache[i] = newPaletteIndexMap.indexToValue(cache[i]);
-                        checkValue(newPaletteIndexMap.maxValue(), false);
                         newPaletteIndexMap = null;
                         cache[index++] = value;
                         continue;
@@ -122,13 +122,13 @@ public final class TestPaletteImpl implements Palette {
     @Override
     public void replace(int oldValue, int newValue) {
         if (oldValue == newValue) return;
+        validateValue(newValue, directBits);
         if (bitsPerEntry == 0) {
             if (oldValue == count) fill(newValue);
         } else {
             final int oldIndex;
             final int newIndex;
             if (isDirect()) {
-                checkValue(newValue, true);
                 oldIndex = oldValue;
                 newIndex = newValue;
             } else {
@@ -162,7 +162,6 @@ public final class TestPaletteImpl implements Palette {
 
     @Override
     public void replace(int x, int y, int z, IntUnaryOperator operator) {
-        validateCoord(dimension, x, y, z);
         final int oldValue = get(x, y, z);
         final int newValue = operator.applyAsInt(oldValue);
         if (oldValue != newValue) set(x, y, z, newValue);
@@ -181,16 +180,15 @@ public final class TestPaletteImpl implements Palette {
             @Override
             public void accept(int x, int y, int z, int oldValue) {
                 final int value = function.apply(x, y, z, oldValue);
+                validateValue(value, directBits);
                 if (value != 0) count++;
                 if (newPaletteIndexMap == null) {
-                    checkValue(value, false);
                     cache[index++] = value;
                     return;
                 }
                 final int maybePaletteIndex = newPaletteIndexMap.valueToIndexCapped(value, maxPaletteSize);
                 if (maybePaletteIndex < 0) {
                     for (int i = 0; i < index; i++) cache[i] = newPaletteIndexMap.indexToValue(cache[i]);
-                    checkValue(newPaletteIndexMap.maxValue(), false);
                     newPaletteIndexMap = null;
                     cache[index++] = value;
                     return;
@@ -206,6 +204,7 @@ public final class TestPaletteImpl implements Palette {
 
     @Override
     public void fill(int value) {
+        validateValue(value, directBits);
         this.bitsPerEntry = 0;
         this.count = value;
         this.values = null;
@@ -242,6 +241,7 @@ public final class TestPaletteImpl implements Palette {
         if (offset == 0) return;
         if (bitsPerEntry == 0) {
             this.count += offset;
+            validateValue(count, directBits);
         } else {
             replaceAll((_, _, _, value) -> value + offset);
         }
@@ -348,7 +348,6 @@ public final class TestPaletteImpl implements Palette {
         // Copy
         this.bitsPerEntry = sourcePalette.bitsPerEntry;
         this.count = sourcePalette.count;
-        this.directBits = sourcePalette.directBits;
 
         if (sourcePalette.values != null) {
             this.values = sourcePalette.values.clone();
@@ -365,13 +364,13 @@ public final class TestPaletteImpl implements Palette {
 
     @Override
     public void load(int[] palette, long[] values) {
+        final byte directBits = this.directBits;
+        for (final int value : palette) validateValue(value, directBits);
         int bpe = palette.length <= 1 ? 0 : TestMathUtils.bitsToRepresent(palette.length - 1);
         bpe = Math.max(minBitsPerEntry, bpe);
 
         if (bpe > maxBitsPerEntry) {
             // Direct mode: convert from palette indices to direct values
-            for (final int value : palette) checkValue(value, false);
-
             this.bitsPerEntry = directBits;
             this.paletteIndexMap = null;
 
@@ -628,18 +627,17 @@ public final class TestPaletteImpl implements Palette {
         this.paletteIndexMap = palette;
     }
 
-    void makeDirect() {
+    @Override
+    public void makeDirect() {
         if (isDirect()) return;
         if (bitsPerEntry == 0) {
             final int fillValue = this.count;
-            checkValue(fillValue, false);
             this.values = new long[arrayLength(dimension, directBits)];
             if (fillValue != 0) {
                 TestPalettes.fill(directBits, this.values, fillValue);
                 this.count = maxSize();
             }
         } else {
-            checkValue(paletteIndexMap.maxValue(), false);
             final int[] ids = paletteIndexMap.indexToValueArray();
             this.values = TestPalettes.remap(dimension, bitsPerEntry, directBits, values, v -> ids[v]);
         }
@@ -677,10 +675,8 @@ public final class TestPaletteImpl implements Palette {
 
     @Override
     public int valueToPaletteIndex(int value) {
-        if (isDirect()) {
-            checkValue(value, true);
-            return value;
-        }
+        validateValue(value, directBits);
+        if (isDirect()) return value;
         if (values == null) initIndirect();
 
         final int pos = paletteIndexMap.find(value);
@@ -696,16 +692,6 @@ public final class TestPaletteImpl implements Palette {
     /// Assumes {@link TestPaletteImpl#bitsPerEntry} != 0
     int valueToPalettIndexOrDefault(int value) {
         return isDirect() ? value : paletteIndexMap.valueToIndexOrDefault(value);
-    }
-
-    void checkValue(int value, boolean allowResize) {
-        if (value < 1 << directBits) return;
-        final byte newDirectBits = (byte) TestMathUtils.bitsToRepresent(value);
-        if (allowResize && isDirect()) {
-            this.values = TestPalettes.remap(dimension, directBits, newDirectBits, values, Int2IntFunction.identity());
-            this.bitsPerEntry = newDirectBits;
-        }
-        this.directBits = newDirectBits;
     }
 
     @Override

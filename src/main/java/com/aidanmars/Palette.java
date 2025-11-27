@@ -8,6 +8,10 @@ import java.util.function.IntUnaryOperator;
 
 @NotNullByDefault
 public interface Palette {
+    void makeDirect();
+
+
+    // normal
     int get(int x, int y, int z);
 
     void getAll(EntryConsumer consumer);

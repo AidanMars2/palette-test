@@ -21,45 +21,15 @@ public class OptimizationBench {
         }
     }
 
-    private int[] bigValues;
-    private int bigIdx;
-    private int[] smallValues;
-    private int smallIdx;
-
-    int nextBig() {
-        return bigValues[bigIdx = (bigIdx + 1) % 10_000];
-    }
-
-    int nextSmall() {
-        return smallValues[smallIdx = (smallIdx + 1) % 10_000];
-    }
-
     @Setup(Level.Iteration)
     public void setupData() {
-        bigValues = BenchUtils.rng.ints(10_000, 0, 128).toArray();
-        smallValues = BenchUtils.rng.ints(10_000, 0, 16).toArray();
-    }
-
-    @Setup(Level.Invocation)
-    public void setupOptimizable() {
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    palette.set(x, y, z, nextBig());
-                }
-            }
-        }
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
-                for (int x = 0; x < 16; x++) {
-                    palette.set(x, y, z, nextSmall());
-                }
-            }
-        }
+        final var rng = BenchUtils.rng.ints(0, 32).iterator();
+        palette.setAll((_, _, _) -> rng.nextInt());
     }
 
     @Benchmark
     public void optimize() {
+        palette.makeDirect();
         palette.optimize(Palette.Optimization.SIZE);
     }
 }
