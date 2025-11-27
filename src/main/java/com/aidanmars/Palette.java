@@ -3,6 +3,7 @@ package com.aidanmars;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.function.IntUnaryOperator;
 
@@ -10,6 +11,7 @@ import java.util.function.IntUnaryOperator;
 public interface Palette {
     void makeDirect();
 
+    void writeMaybeResized(Blackhole bh, int outputBpe);
 
     // normal
     int get(int x, int y, int z);

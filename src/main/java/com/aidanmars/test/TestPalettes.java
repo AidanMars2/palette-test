@@ -47,6 +47,10 @@ public class TestPalettes {
         return (elementCount + valuesPerLong - 1) / valuesPerLong;
     }
 
+    public static int directBitsPerEntry(int maxValue, int maxBitsPerEntry, int directBits) {
+        return Math.clamp(64 / (64 / TestMathUtils.bitsToRepresent(maxValue)), maxBitsPerEntry + 1, directBits);
+    }
+
     public static int read(int dimension, int bitsPerEntry, long[] values,
                            int x, int y, int z) {
         final int sectionIndex = sectionIndex(dimension, x, y, z);
@@ -124,6 +128,26 @@ public class TestPalettes {
             final int end = Math.min(valuesPerLong, size - idx);
             for (int j = 0; j < end; j++, idx++) {
                 if (((int) (block & mask)) == paletteIndex) result++;
+                block >>>= bitsPerEntry;
+            }
+        }
+        return result;
+    }
+
+    public static int singleValue(int dimension, int bitsPerEntry, long[] values) {
+        int result = -1;
+        final int size = dimension * dimension * dimension;
+        final int valuesPerLong = 64 / bitsPerEntry;
+        final int mask = (1 << bitsPerEntry) - 1;
+        for (int i = 0, idx = 0; i < values.length; i++) {
+            long block = values[i];
+            final int end = Math.min(valuesPerLong, size - idx);
+            for (int j = 0; j < end; j++, idx++) {
+                if (result < 0) {
+                    result = (int) (block & mask);
+                } else if (result != (block & mask)) {
+                    return -1;
+                }
                 block >>>= bitsPerEntry;
             }
         }

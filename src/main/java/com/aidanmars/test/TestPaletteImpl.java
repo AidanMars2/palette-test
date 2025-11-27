@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.ints.Int2IntFunction;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -473,44 +474,71 @@ public final class TestPaletteImpl implements Palette {
     public void optimize(Optimization focus) {
         if (bitsPerEntry == 0) return;
 
-        if (focus == Optimization.SPEED) {
-            final PaletteIndexMap newPalette = collectOptimizedPalette((byte) 0);
-            if (newPalette == null) {
-                makeDirect();
-                return;
-            }
-            fill(newPalette.indexToValue(0));
-        } else if (focus == Optimization.SIZE) {
-            final PaletteIndexMap newPalette = collectOptimizedPalette((byte) Math.min(bitsPerEntry, maxBitsPerEntry));
-            if (newPalette == null) return;
-            downsizeWithPalette(newPalette);
+        switch (focus) {
+            case SIZE -> optimizeSize();
+            case SPEED -> optimizeSpeed();
         }
     }
 
     /// Assumes bitsPerEntry != 0
-    public @Nullable PaletteIndexMap collectOptimizedPalette(byte maxBitsPerEntry) {
+    private void optimizeSpeed() {
+        final int singlePaletteIndex = TestPalettes.singleValue(dimension, bitsPerEntry, values);
+        if (singlePaletteIndex < 0) {
+            if (isDirect()) {
+                if (bitsPerEntry != directBits) {
+                    this.values = TestPalettes.remap(dimension, bitsPerEntry, directBits, values, Int2IntFunction.identity());
+                    this.bitsPerEntry = directBits;
+                }
+            } else {
+                this.values = TestPalettes.remap(dimension, bitsPerEntry, directBits, values, paletteIndexMap::indexToValue);
+                this.bitsPerEntry = directBits;
+                this.paletteIndexMap = null;
+            }
+        } else {
+            fill(paletteIndexToValue(singlePaletteIndex));
+        }
+    }
+
+    /// Assumes bitsPerEntry != 0
+    private void optimizeSize() {
         final int size = maxSize();
         final int bits = bitsPerEntry;
         final int valuesPerLong = 64 / bits;
         final int mask = (1 << bits) - 1;
 
-        final PaletteIndexMap result = new PaletteIndexMap((byte) Math.max(1, maxBitsPerEntry));
+        @Nullable
+        PaletteIndexMap palette = new PaletteIndexMap((byte) Math.min(bitsPerEntry, maxBitsPerEntry));
+        int maxValue = 0;
         final int maxPaletteSize = 1 << maxBitsPerEntry;
         for (int i = 0, idx = 0; i < values.length; i++) {
             long block = values[i];
             final int end = Math.min(valuesPerLong, size - idx);
             for (int j = 0; j < end; j++, idx++) {
-                final int paletteIndex = (int) (block & mask);
-                final int value = paletteIndexToValue(paletteIndex);
-                final int pos = result.find(value);
-                if (pos < 0) {
-                    if (result.size() >= maxPaletteSize) return null;
-                    result.UNSAFE_insert(~pos, value);
+                if (palette != null) {
+                    final int paletteIndex = (int) (block & mask);
+                    final int value = paletteIndexToValue(paletteIndex);
+                    final int pos = palette.find(value);
+                    if (pos < 0) {
+                        if (palette.size() >= maxPaletteSize) {
+                            maxValue = palette.maxValue();
+                            palette = null;
+                        } else palette.UNSAFE_insert(~pos, value);
+                    }
+                } else {
+                    maxValue = Math.max(maxValue, (int) (block & mask));
                 }
                 block >>>= bits;
             }
         }
-        return result;
+        if (palette != null) {
+            downsizeWithPalette(palette);
+        } else {
+            final int newBpe = TestPalettes.directBitsPerEntry(maxValue, maxBitsPerEntry, directBits);
+            if (newBpe != bitsPerEntry) {
+                this.values = TestPalettes.remap(dimension, bitsPerEntry, newBpe, values, Int2IntFunction.identity());
+                this.bitsPerEntry = (byte) newBpe;
+            }
+        }
     }
 
     @Override
@@ -630,19 +658,55 @@ public final class TestPaletteImpl implements Palette {
     @Override
     public void makeDirect() {
         if (isDirect()) return;
+        final int newBpe;
         if (bitsPerEntry == 0) {
             final int fillValue = this.count;
-            this.values = new long[arrayLength(dimension, directBits)];
+            newBpe = TestPalettes.directBitsPerEntry(fillValue, maxBitsPerEntry, directBits);
+            this.values = new long[arrayLength(dimension, newBpe)];
             if (fillValue != 0) {
-                TestPalettes.fill(directBits, this.values, fillValue);
+                TestPalettes.fill(newBpe, this.values, fillValue);
                 this.count = maxSize();
             }
         } else {
-            final int[] ids = paletteIndexMap.indexToValueArray();
-            this.values = TestPalettes.remap(dimension, bitsPerEntry, directBits, values, v -> ids[v]);
+            newBpe = TestPalettes.directBitsPerEntry(paletteIndexMap.maxValue(), maxBitsPerEntry, directBits);
+            this.values = TestPalettes.remap(dimension, bitsPerEntry, newBpe, values, paletteIndexMap::indexToValue);
         }
         this.paletteIndexMap = null;
-        this.bitsPerEntry = directBits;
+        this.bitsPerEntry = (byte) newBpe;
+    }
+
+    @Override
+    public void writeMaybeResized(Blackhole bh, int outputBitsPerEntry) {
+        final long[] values = this.values;
+        final int bitsPerEntry = this.bitsPerEntry;
+        final int size = dimension * dimension * dimension;
+        final int valuesPerLong = 64 / bitsPerEntry;
+        final int mask = (1 << bitsPerEntry) - 1;
+        final int directMaxBit = (64 / outputBitsPerEntry) * outputBitsPerEntry;
+        int bitIndex = 0;
+        long outBlock = 0;
+        for (int i = 0, idx = 0; i < values.length; i++) {
+            long block = values[i];
+            final int end = Math.min(valuesPerLong, size - idx);
+            for (int j = 0; j < end; j++, idx++) {
+                outBlock |= (block & mask) << bitIndex;
+                bitIndex += outputBitsPerEntry;
+                if (bitIndex >= directMaxBit) {
+                    bh.consume(outBlock);
+                    outBlock = 0;
+                    bitIndex = 0;
+                }
+                block >>>= bitsPerEntry;
+            }
+        }
+        if (bitIndex != 0) bh.consume(outBlock);
+    }
+
+    void checkDirectSize(int value) {
+        if (value < 1 << bitsPerEntry) return;
+        final int newBpe = TestPalettes.directBitsPerEntry(value, maxBitsPerEntry, directBits);
+        this.values = TestPalettes.remap(dimension, bitsPerEntry, newBpe, values, Int2IntFunction.identity());
+        this.bitsPerEntry = (byte) newBpe;
     }
 
     /// Assumes {@link TestPaletteImpl#bitsPerEntry} != 0
@@ -676,7 +740,10 @@ public final class TestPaletteImpl implements Palette {
     @Override
     public int valueToPaletteIndex(int value) {
         validateValue(value, directBits);
-        if (isDirect()) return value;
+        if (isDirect()) {
+            checkDirectSize(value);
+            return value;
+        }
         if (values == null) initIndirect();
 
         final int pos = paletteIndexMap.find(value);
@@ -684,7 +751,10 @@ public final class TestPaletteImpl implements Palette {
         if (paletteIndexMap.size() >= (1 << bitsPerEntry)) {
             // Palette is full, must resize
             upsize();
-            if (isDirect()) return value;
+            if (isDirect()) {
+                checkDirectSize(value);
+                return value;
+            }
         }
         return paletteIndexMap.UNSAFE_insert(~pos, value);
     }

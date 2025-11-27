@@ -15,6 +15,8 @@ public class PaletteIndexMap implements Cloneable {
     private int maxFill;
     private int size;
 
+    private int maxValue;
+
     /**
      * Assumes bitsPerEntry > 0
      */
@@ -69,12 +71,7 @@ public class PaletteIndexMap implements Cloneable {
     }
 
     int maxValue() {
-        int result = 0;
-        for (int index = 0; index < size; index++) {
-            final int value = indexToValue[index];
-            if (value > result) result = value;
-        }
-        return result;
+        return maxValue;
     }
 
     int find(final int value) {
@@ -93,6 +90,7 @@ public class PaletteIndexMap implements Cloneable {
     }
 
     int UNSAFE_insert(final int pos, final int value) {
+        if (value > maxValue) maxValue = value;
         final int nextIndex = size;
         if (pos == n) containsNullKey = true;
         this.value[pos] = value;
@@ -112,6 +110,7 @@ public class PaletteIndexMap implements Cloneable {
     }
 
     void UNSAFE_replace(final int oldPos, final int newValue) {
+        if (newValue > maxValue) maxValue = newValue;
         final int oldIndex = index[oldPos];
         shiftKeys(oldPos);
         final int newPos = ~find(newValue);

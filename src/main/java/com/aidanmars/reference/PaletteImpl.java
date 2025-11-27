@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.ints.*;
 import org.jetbrains.annotations.NotNullByDefault;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnknownNullability;
+import org.openjdk.jmh.infra.Blackhole;
 
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -695,6 +696,11 @@ public final class PaletteImpl implements Palette {
         this.paletteToValueList = null;
         this.valueToPaletteMap = null;
         this.bitsPerEntry = directBits;
+    }
+
+    @Override
+    public void writeMaybeResized(Blackhole bh, int outputBpe) {
+        for (final long block : values) bh.consume(block);
     }
 
     /// Assumes {@link PaletteImpl#bitsPerEntry} != 0
