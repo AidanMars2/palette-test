@@ -24,12 +24,12 @@ public class WriteValuesBench {
 
     @Setup(Level.Iteration)
     public void setupData() {
-        final var rng = BenchUtils.rng.ints(0, 1 << 13).iterator();
+        final var rng = BenchUtils.rng.ints(0, 1 << 12).iterator();
         palette.setAll((_, _, _) -> rng.nextInt());
     }
 
     @Benchmark
     public void write(Blackhole bh) {
-        palette.writeMaybeResized(bh, 20);
+        palette.writeMaybeResized(bh, 16);
     }
 }

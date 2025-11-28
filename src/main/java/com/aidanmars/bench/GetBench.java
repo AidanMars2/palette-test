@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-public class GetSetBench {
+public class GetBench {
     @Param({"reference", "optimized"})
     private String impl;
     private Palette palette;
@@ -22,14 +22,11 @@ public class GetSetBench {
         }
     }
 
+    @Param({"true", "false"})
+    private boolean direct;
+
     private int[] positions;
     private int posIdx;
-    private int[] values;
-    private int idx;
-
-    int nextValue() {
-        return values[idx = (idx + 1) & (1 << 10) - 1];
-    }
 
     int nextPos() {
         return positions[posIdx = (posIdx + 1) & (1 << 16) - 1];
@@ -37,16 +34,9 @@ public class GetSetBench {
 
     @Setup(Level.Iteration)
     public void setupData() {
-        values = BenchUtils.rng.ints(1 << 10, 0, 128).toArray();
         positions = BenchUtils.rng.ints(1 << 16, 0, 1 << 12).toArray();
-    }
-
-    @Benchmark
-    public void set() {
-        for (int i = 0; i < 200; i++) {
-            final int locIdx = nextPos();
-            palette.set(locIdx & 15, (locIdx >> 4) & 15, (locIdx >> 8) & 15, nextValue());
-        }
+        palette.setAll((_, _, _) -> BenchUtils.rng.nextInt(direct ? 1 << 16 : 128));
+        palette.optimize(direct ? Palette.Optimization.SPEED : Palette.Optimization.SIZE);
     }
 
     @Benchmark
